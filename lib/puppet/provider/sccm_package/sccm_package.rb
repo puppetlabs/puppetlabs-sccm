@@ -26,7 +26,14 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
         next unless dp[:name] == pkg[:dp]
         pkg_proto = dp[:ssl] ? 'https' : 'http'
         pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{pkg[:name]}"
-        list_of_files = recursive_download_list(pkg_uri)
+        case dp[:auth]
+        when 'none'
+          list_of_files = recursive_download_list(pkg_uri)
+        when 'windows'
+          list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])          
+        else
+          raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
+        end
         in_sync = true
         list_of_files.each do |key, value|
           uri_match = pkg_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
@@ -72,7 +79,14 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
       next unless dp[:name] == should[:dp]
       pkg_proto = dp[:ssl] ? 'https' : 'http'
       pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{name}"
-      list_of_files = recursive_download_list(pkg_uri)
+      case dp[:auth]
+      when 'none'
+        list_of_files = recursive_download_list(pkg_uri)
+      when 'windows'
+        list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])          
+      else
+        raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
+      end
       list_of_files.each do |key, value|
         uri_match = pkg_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
         file_path = key.gsub(%r{#{uri_match}\.\d+?\/}, '')
@@ -85,7 +99,14 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
             download = true
           end
         end
-        http_download(context, key, "#{should[:dest]}/#{name}/#{file_path}") if download
+        case dp[:auth]
+        when 'none'
+          http_download(context, key, "#{should[:dest]}/#{name}/#{file_path}") if download
+        when 'windows'
+          http_download(context, key, "#{should[:dest]}/#{name}/#{file_path}", 'windows', dp[:username], dp[:domain], dp[:password]) if download
+        else
+          raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
+        end
       end
     end
   end
@@ -103,13 +124,13 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     end
   end
 
-  def recursive_download_list(uri)
+  def recursive_download_list(uri, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
     result = {}
-    head = make_request(uri, :head)
+    head = make_request(uri, :head, auth_type, auth_user, auth_domain, auth_password)
     if head['Content-Length'].to_i.positive?
       result[uri] = head['Content-Length']
     elsif head['Content-Length'].to_i.zero?
-      response = make_request(uri, :get)
+      response = make_request(uri, :get, auth_type, auth_user, auth_domain, auth_password)
       links = response.body.scan(%r{<a href="(.+?)">})
       links.each do |link|
         lookup = recursive_download_list(link[0])
@@ -121,7 +142,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     result
   end
 
-  def make_request(endpoint, type)
+  def make_request(endpoint, type, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
     uri = URI.parse(endpoint)
 
     connection = Net::HTTP.new(uri.host, uri.port)
@@ -147,6 +168,9 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
         else
           raise Puppet::Error, "sccm_package#make_request called with invalid request type #{type}"
         end
+        if auth_type == 'windows'
+          request.ntlm_auth(auth_user, auth_domain, auth_password)
+        end
         request.method
         response = connection.request(request)
       rescue SocketError => e
@@ -167,7 +191,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     end
   end
 
-  def http_download(context, resource, filename)
+  def http_download(context, resource, filename, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
     uri = URI(resource)
     context.notice("Downloading SCCM package file: #{uri}")
     http_object = Net::HTTP.new(uri.host, uri.port)
@@ -178,6 +202,9 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     begin
       http_object.start do |http|
         request = Net::HTTP::Get.new uri
+        if auth_type == 'windows'
+          request.ntlm_auth(auth_user, auth_domain, auth_password)
+        end
         http.read_timeout = 60
         http.request request do |response|
           open filename, 'wb' do |io|

@@ -8,8 +8,11 @@ Puppet::ResourceApi.register_type(
 @summary a Puppet type to define an SCCM Distribution Point
 @example
 sccm_dp { 'sccmdp1.company.local':
-  auth => 'none',
-  ssl  => false
+  auth     => 'windows',
+  username => 'sccm_user',
+  domain   => 'COMPANY',
+  password => 's3cr3t',
+  ssl      => false
 }
 This type provides Puppet with the necessary information about distribution points
 DOC
@@ -29,6 +32,21 @@ DOC
       type: 'Enum[none, windows, pki]',
       desc: 'Type of authentication the SCCM Distribution Point requires.',
       default: 'none',
+    },
+    username: {
+      type: 'String',
+      desc: 'Username for Windows Authentication (HTTP) to the SCCM Distribution Point.',
+      default: '',
+    },
+    domain: {
+      type: 'String',
+      desc: 'Domain name (NetBIOS) for Windows Authentication (HTTP) to the SCCM Distribution Point.',
+      default: '',
+    },
+    password: {
+      type: 'String',
+      desc: 'Password for Windows Authentication (HTTP) to the SCCM Distribution Point.',
+      default: '',
     },
     ssl: {
       type: 'Boolean',
