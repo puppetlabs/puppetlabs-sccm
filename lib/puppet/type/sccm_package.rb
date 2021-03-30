@@ -17,7 +17,7 @@ This type provides Puppet with the capabilities to manage SCCM package contents
 **Autorequires**:
 This type will autorequire the sccm_dp resource identified by the 'dp' attribute.
 DOC
-  features: [],
+  features: ['raw_catalog_access'],
   attributes: {
     ensure: {
       type: 'Enum[present, absent]',
