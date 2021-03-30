@@ -26,7 +26,6 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
         next unless dp[:name] == pkg[:dp]
         pkg_proto = dp[:ssl] ? 'https' : 'http'
         pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{pkg[:name]}"
-        puts pkg_uri
         list_of_files = recursive_download_list(pkg_uri)
         in_sync = true
         list_of_files.each do |key, value|
