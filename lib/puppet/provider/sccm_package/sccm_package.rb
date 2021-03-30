@@ -20,25 +20,26 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     pkg_files = Dir["#{@confdir}/*.pkg.yaml"]
     pkgs = pkg_files.map { |pkg| YAML.load_file(pkg) }
     pkgs.map do |pkg|
-      puts dps.to_yaml
-      # puts dps['sccm.dreamworx.nl']['ssl']
-      # puts context.catalog.resource("Sccm_dp[#{pkg[:dp]}]")['auth']
       exists = File.directory?(pkg[:dest])
       pkg[:ensure] = exists ? 'present' : 'absent'
-      pkg_uri = "http://#{pkg[:dp]}/SMS_DP_SMSPKG$/#{pkg[:name]}"
-      list_of_files = recursive_download_list(pkg_uri)
-      in_sync = true
-      list_of_files.each do |key, value|
-        uri_match = pkg_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
-        file_path = key.gsub(%r{#{uri_match}\.\d+?\/}, '')
-        if File.exist?("#{pkg[:dest]}/#{pkg[:name]}/#{file_path}")
-          in_sync = false unless File.size("#{pkg[:dest]}/#{pkg[:name]}/#{file_path}").to_i == value.to_i
-        else
-          in_sync = false
+      dps.each do |dp|
+        next unless dp[:name] == pkg[:dp]
+        pkg_proto = dp[:ssl] ? 'https' : 'http'
+        pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{pkg[:name]}"
+        list_of_files = recursive_download_list(pkg_uri)
+        in_sync = true
+        list_of_files.each do |key, value|
+          uri_match = pkg_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
+          file_path = key.gsub(%r{#{uri_match}\.\d+?\/}, '')
+          if File.exist?("#{pkg[:dest]}/#{pkg[:name]}/#{file_path}")
+            in_sync = false unless File.size("#{pkg[:dest]}/#{pkg[:name]}/#{file_path}").to_i == value.to_i
+          else
+            in_sync = false
+          end
         end
+        pkg[:sync_content] = in_sync
+        pkg
       end
-      pkg[:sync_content] = in_sync
-      pkg
     end
   end
 
