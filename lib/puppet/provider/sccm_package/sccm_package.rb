@@ -16,7 +16,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
   def get(context)
     context.debug('Returning info for SCCM packages')
     puts context.catalog
-    pkg_files = Dir["#{@confdir}/*.yaml"]
+    pkg_files = Dir["#{@confdir}/*.pkg.yaml"]
     pkgs = pkg_files.map { |pkg| YAML.load_file(pkg) }
     pkgs.map do |pkg|
       exists = File.directory?(pkg[:dest])
@@ -40,24 +40,24 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
 
   def create(context, name, should)
     context.notice("SCCM package '#{name}' with #{should.inspect}")
-    File.write("#{@confdir}/#{name}.yaml", should.to_yaml)
+    File.write("#{@confdir}/#{name}.pkg.yaml", should.to_yaml)
     sync_contents(context, name, should)
   end
 
   def update(context, name, should)
     context.notice("SCCM package '#{name}' with #{should.inspect}")
-    pkg = YAML.load_file("#{@confdir}/#{name}.yaml")
+    pkg = YAML.load_file("#{@confdir}/#{name}.pkg.yaml")
     new_pkg = pkg.merge(should)
     remove_dir("#{pkg[:dest]}/#{name}") unless pkg[:dest] == new_pkg[:dest]
-    File.write("#{@confdir}/#{name}.yaml", new_pkg.to_yaml)
+    File.write("#{@confdir}/#{name}.pkg.yaml", new_pkg.to_yaml)
     sync_contents(context, name, should)
   end
 
   def delete(context, name)
     context.notice("SCCM package '#{name}'")
-    pkg = YAML.load_file("#{@confdir}/#{name}.yaml")
+    pkg = YAML.load_file("#{@confdir}/#{name}.pkg.yaml")
     remove_dir("#{pkg[:dest]}/#{name}")
-    File.delete("#{@confdir}/#{name}.yaml")
+    File.delete("#{@confdir}/#{name}.pkg.yaml")
   end
 
   def sync_contents(context, name, should)
