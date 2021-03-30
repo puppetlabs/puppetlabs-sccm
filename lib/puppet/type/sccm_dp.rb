@@ -15,6 +15,11 @@ This type provides Puppet with the necessary information about distribution poin
 DOC
   features: [],
   attributes: {
+    ensure: {
+      type: 'Enum[present, absent]',
+      desc: 'Whether this SCCM Distribution Point config should be defined on the target system.',
+      default: 'present',
+    },
     name: {
       type: 'String',
       desc: 'FQDN of the SCCM Distribution Point to download from.',
