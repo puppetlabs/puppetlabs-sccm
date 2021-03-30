@@ -67,21 +67,27 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
   end
 
   def sync_contents(context, name, should)
-    pkg_uri = "http://#{should[:dp]}/SMS_DP_SMSPKG$/#{name}"
-    list_of_files = recursive_download_list(pkg_uri)
-    list_of_files.each do |key, value|
-      uri_match = pkg_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
-      file_path = key.gsub(%r{#{uri_match}\.\d+?\/}, '')
-      Puppet::FileSystem.dir_mkpath("#{should[:dest]}/#{name}/#{file_path}")
-      download = false
-      if ! File.exist?("#{should[:dest]}/#{name}/#{file_path}")
-        download = true
-      else
-        if ! File.size("#{should[:dest]}/#{name}/#{file_path}") == value
+    dp_files = Dir["#{@confdir}/*.dp.yaml"]
+    dps = dp_files.map { |dp| YAML.load_file(dp) }
+    dps.each do |dp|
+      next unless dp[:name] == should[:dp]
+      pkg_proto = dp[:ssl] ? 'https' : 'http'
+      pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{name}"
+      list_of_files = recursive_download_list(pkg_uri)
+      list_of_files.each do |key, value|
+        uri_match = pkg_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
+        file_path = key.gsub(%r{#{uri_match}\.\d+?\/}, '')
+        Puppet::FileSystem.dir_mkpath("#{should[:dest]}/#{name}/#{file_path}")
+        download = false
+        if ! File.exist?("#{should[:dest]}/#{name}/#{file_path}")
           download = true
+        else
+          if ! File.size("#{should[:dest]}/#{name}/#{file_path}") == value
+            download = true
+          end
         end
+        http_download(context, key, "#{should[:dest]}/#{name}/#{file_path}") if download
       end
-      http_download(context, key, "#{should[:dest]}/#{name}/#{file_path}") if download
     end
   end
 
@@ -122,6 +128,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     connection = Net::HTTP.new(uri.host, uri.port)
     if uri.scheme == 'https'
       connection.use_ssl = true
+      connection.verify_mode = OpenSSL::SSL::VERIFY_NONE
     end
 
     connection.read_timeout = 60
@@ -165,7 +172,10 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     uri = URI(resource)
     context.notice("Downloading SCCM package file: #{uri}")
     http_object = Net::HTTP.new(uri.host, uri.port)
-    http_object.use_ssl = true if uri.scheme == 'https'
+    if uri.scheme == 'https'
+      http_object.use_ssl = true
+      http_object.verify_mode = OpenSSL::SSL::VERIFY_NONE
+    end
     begin
       http_object.start do |http|
         request = Net::HTTP::Get.new uri
