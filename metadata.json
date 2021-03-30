@@ -1,0 +1,33 @@
+{
+  "name": "puppetlabs-sccm",
+  "version": "0.1.0",
+  "author": "puppetlabs",
+  "summary": "Download packages from SCCM distribution points",
+  "license": "Apache-2.0",
+  "source": "https://forge.puppet.com/puppetlabs/sccm",
+  "project_page": "https://github.com/puppetlabs/puppetlabs-sccm",
+  "issues_url": "https://github.com/puppetlabs/puppetlabs-sccm/issues",
+  "dependencies": [
+  ],
+  "operatingsystem_support": [
+    {
+      "operatingsystem": "windows",
+      "operatingsystemrelease": [
+        "2012",
+        "2012 R2",
+        "2016",
+        "2019",
+        "10"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "name": "puppet",
+      "version_requirement": ">= 6.21.0 < 8.0.0"
+    }
+  ],
+  "pdk-version": "2.0.0",
+  "template-url": "pdk-default#2.0.0",
+  "template-ref": "tags/2.0.0-0-ge838f1d"
+}
