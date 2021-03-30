@@ -15,6 +15,7 @@ sccm_package { 'PRI00004':
 This type provides Puppet with the capabilities to manage SCCM package contents
 
 **Autorequires**:
+This type will autorequire the sccm class to ensure the ruby-ntlm gem is installed.
 This type will autorequire the sccm_dp resource identified by the 'dp' attribute.
 DOC
   features: ['raw_catalog_access'],
@@ -44,6 +45,7 @@ DOC
     },
   },
   autorequire: {
+    class: 'sccm',
     sccm_dp: '$dp', # evaluates to the value of the `dp` attribute
   },
 )
