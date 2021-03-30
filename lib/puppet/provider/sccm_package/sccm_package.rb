@@ -15,10 +15,14 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
 
   def get(context)
     context.debug('Returning info for SCCM packages')
+    dp_files = Dir["#{@confdir}/*.dp.yaml"]
+    dps = dp_files.map { |dp| YAML.load_file(dp) }
     pkg_files = Dir["#{@confdir}/*.pkg.yaml"]
     pkgs = pkg_files.map { |pkg| YAML.load_file(pkg) }
     pkgs.map do |pkg|
-      puts context.catalog.resource("Sccm_dp[#{pkg[:dp]}]")['auth']
+      puts dps.to_yaml
+      # puts dps['sccm.dreamworx.nl']['ssl']
+      # puts context.catalog.resource("Sccm_dp[#{pkg[:dp]}]")['auth']
       exists = File.directory?(pkg[:dest])
       pkg[:ensure] = exists ? 'present' : 'absent'
       pkg_uri = "http://#{pkg[:dp]}/SMS_DP_SMSPKG$/#{pkg[:name]}"
