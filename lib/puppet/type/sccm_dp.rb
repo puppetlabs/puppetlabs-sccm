@@ -46,7 +46,7 @@ DOC
       mandatory_for_set: false,
     },
     password: {
-      type: 'Optional[Variant[String,Sensitive[String]]]',
+      type: 'Optional[Variant[String,Sensitive[String]]]', # Sensitive does not currently work
       sensitive: true,
       desc: 'Password for Windows Authentication (HTTP) to the SCCM Distribution Point.',
       mandatory_for_get: false,
