@@ -52,17 +52,17 @@ The above code will download the PRI00005 package from `http://sccmdp2.company.l
 Example for the same situation but now with authenticated HTTP access:
 
 ```puppet
-sccm_dp { 'sccmdp2.company.local':    # <-- FQDN of the SCCM distribution point
-  auth     => 'windows',              # <-- 'windows' for Windows authentication
-  username => 'svcSCCM',              # <-- Username for authentication
-  domain   => 'companyAD',            # <-- Domain name (NetBIOS) for authentication
-  password => 's3cr3tp@ss',          # <-- Password for authentication
+sccm_dp { 'sccmdp2.company.local':     # <-- FQDN of the SCCM distribution point
+  auth     => 'windows',               # <-- 'windows' for Windows authentication
+  username => 'svcSCCM',               # <-- Username for authentication
+  domain   => 'companyAD',             # <-- Domain name (NetBIOS) for authentication
+  password => Sensitive('s3cr3tp@ss'), # <-- Password for authentication
 }
 
-sccm_package{ 'PRI00005':             # <-- PRI00005 is the SCCM package ID
+sccm_package{ 'PRI00005':              # <-- PRI00005 is the SCCM package ID
   ensure => present,
-  dp     => 'sccmdp2.company.local',  # <-- Must match name of sccm_dp resource
-  dest   => 'C:\Windows\Temp\Pkg'     # <-- Folder in which to store packages
+  dp     => 'sccmdp2.company.local',   # <-- Must match name of sccm_dp resource
+  dest   => 'C:\Windows\Temp\Pkg'      # <-- Folder in which to store packages
 }
 ```
 
@@ -159,7 +159,7 @@ class profile::sccm_packages(
     auth     => $dp_configs[$dp]['auth'],
     username => $dp_configs[$dp]['username'],
     domain   => $dp_configs[$dp]['domain'],
-    password => $dp_configs[$dp]['password'],
+    password => Sensitive($dp_configs[$dp]['password']),
   }
 
   $pkgs = lookup('sccm::packages')
