@@ -44,8 +44,7 @@ DOC
       default: '',
     },
     password: {
-      type: 'String',
-      sensitive: true,
+      type: 'Sensitive[String]',
       desc: 'Password for Windows Authentication (HTTP) to the SCCM Distribution Point.',
       default: '',
     },
