@@ -134,7 +134,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
       response = make_request(uri, :get, auth_type, auth_user, auth_domain, auth_password)
       links = response.body.scan(%r{<a href="(.+?)">})
       links.each do |link|
-        lookup = recursive_download_list(link[0])
+        lookup = recursive_download_list(link[0], auth_type, auth_user, auth_domain, auth_password)
         lookup.each do |key, value|
           result[key] = value
         end
