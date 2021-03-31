@@ -128,6 +128,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
   def recursive_download_list(uri, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
     result = {}
     head = make_request(uri, :head, auth_type, auth_user, auth_domain, auth_password)
+    raise Puppet::ResourceError, "Failed to connect to SCCM Distribution Point! Got error #{head.code}, #{head.message}" unless head.code.to_i == 200
     if head['Content-Length'].to_i.positive? && head['Content-Type'] == 'application/octet-stream'
       result[uri] = head['Content-Length']
     elsif head['Content-Length'].to_i.zero?
