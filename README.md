@@ -30,8 +30,8 @@ To start with sccm, complete the following prerequirements:
 
 To download an SCCM package with this module, we need to define two things:
 
-* A `sccm_dp` resource to identify an SCCM Distribution Point
-* A `sccm_package` resource to identify the package we want to download & manage
+* An `sccm_dp` resource to identify an SCCM Distribution Point
+* An `sccm_package` resource to identify the package we want to download & manage
 
 Example for a SCCM Distribution Point with anonymous HTTP access:
 
@@ -56,7 +56,7 @@ sccm_dp { 'sccmdp2.company.local':     # <-- FQDN of the SCCM distribution point
   auth     => 'windows',               # <-- 'windows' for Windows authentication
   username => 'svcSCCM',               # <-- Username for authentication
   domain   => 'companyAD',             # <-- Domain name (NetBIOS) for authentication
-  password => Sensitive('s3cr3tp@ss'), # <-- Password for authentication
+  password => 's3cr3tp@ss',            # <-- Password for authentication
 }
 
 sccm_package{ 'PRI00005':              # <-- PRI00005 is the SCCM package ID
@@ -96,14 +96,31 @@ The most flexible way to use this module in production is to make the Puppet cod
 
 This module provides a `sccm_site_code` fact, that will report the SCCM Site the machine is assigned to if the SCCM Client is installed. You can take advantage of this in Hiera.
 
-For example, let's create the following structure in Hiera:
+For example, let's create the following structure (a YAML file per SCCM site) in Hiera:
 
 ```bash
 data/sccm_sites/S01.yaml
 data/sccm_sites/S02.yaml
 ```
 
-and then extend `hiera.yaml` to include `"sccm_sites/%{sccm_site_code}.yaml"` in the hierarchy.
+and then extend `hiera.yaml` to include the SCCM site YAML files in the hierarchy:
+
+`hiera.yaml`
+```yaml
+---
+version: 5
+
+defaults:
+  datadir: 'data'
+
+hierarchy:
+  - name: 'Yaml backend'
+    data_hash: yaml_data
+    paths:
+      - "nodes/%{trusted.certname}.yaml"
+      - "sccm_sites/%{sccm_site_code}.yaml"
+      - 'common.yaml'
+```
 
 Next, we can populate the relevant information for a site:
 
@@ -140,7 +157,7 @@ sccm::packages:
 
 This structures all the relevant information for us, and allows us to reference packages by a friendly name, instead of the SCCM Package ID. That way, if the Package ID changes for whatever reason, you can update this in a single location.
 
-Next, we need a Puppet profile to create some useful logic:
+Next, we need to build a Puppet profile with the logic to parse the information from Hiera:
 
 `site-modules/profile/manifests/sccm_packages.pp`
 ```puppet
@@ -180,7 +197,7 @@ class profile::sccm_packages(
 }
 ```
 
-The profile above will:
+The profile above will, in the context of each node's assigned SCCM Site:
 
 * Lookup the mapping of subnets to distribution points in the `sccm::networks` hash, and select the correct distribution point based on a matching entry to the `network` fact of the node
 * Lookup the configurations of all distribution points in the `sccm::distribution_points` hash, and create a `sccm_dp` resource with the configuration for that specific distribution point
