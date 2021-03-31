@@ -45,7 +45,6 @@ DOC
     },
   },
   autorequire: {
-    class: 'sccm',
     sccm_dp: '$dp', # evaluates to the value of the `dp` attribute
   },
 )
