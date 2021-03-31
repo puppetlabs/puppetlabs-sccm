@@ -5,16 +5,20 @@ require 'puppet/resource_api'
 Puppet::ResourceApi.register_type(
   name: 'sccm_package',
   docs: <<-DOC,
-@summary a sccm_package type
+@summary a Puppet type to define an SCCM Package
 @example
 sccm_package { 'PRI00004':
   ensure => 'present',
-  dp     => 'sccm_dp.company.local',
+  dp     => 'sccmdp1.company.local',
   dest   => 'C:/Windows/Temp/Pkg'
 }
 This type provides Puppet with the capabilities to manage SCCM package contents
+
+**Autorequires**:
+This type will autorequire the sccm class to ensure the ruby-ntlm gem is installed.
+This type will autorequire the sccm_dp resource identified by the 'dp' attribute.
 DOC
-  features: [],
+  features: ['raw_catalog_access'],
   attributes: {
     ensure: {
       type: 'Enum[present, absent]',
@@ -28,7 +32,7 @@ DOC
     },
     dp: {
       type: 'String',
-      desc: 'FQDN of the SCCM Distribution Point to download from.',
+      desc: 'Name of the sccm_dp resource that defines the SCCM Distribution Point to use.',
     },
     dest: {
       type: 'String',
@@ -39,5 +43,9 @@ DOC
       desc: 'Whether or not the local contents match the source.',
       default: true,
     },
+  },
+  autorequire: {
+    class: 'sccm',
+    sccm_dp: '$dp', # evaluates to the value of the `dp` attribute
   },
 )

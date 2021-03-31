@@ -4,6 +4,7 @@ require 'puppet/resource_api/simple_provider'
 require 'yaml'
 require 'net/http'
 require 'uri'
+require 'ruby-ntlm/ntlm/http'
 
 # Implementation for the sccm_package type using the Resource API.
 class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimpleProvider
@@ -15,66 +16,99 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
 
   def get(context)
     context.debug('Returning info for SCCM packages')
-    pkg_files = Dir["#{@confdir}/*.yaml"]
+    dp_files = Dir["#{@confdir}/*.dp.yaml"]
+    dps = dp_files.map { |dp| YAML.load_file(dp) }
+    pkg_files = Dir["#{@confdir}/*.pkg.yaml"]
     pkgs = pkg_files.map { |pkg| YAML.load_file(pkg) }
     pkgs.map do |pkg|
       exists = File.directory?(pkg[:dest])
       pkg[:ensure] = exists ? 'present' : 'absent'
-      pkg_uri = "http://#{pkg[:dp]}/SMS_DP_SMSPKG$/#{pkg[:name]}"
-      list_of_files = recursive_download_list(pkg_uri)
-      in_sync = true
-      list_of_files.each do |key, value|
-        uri_match = pkg_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
-        file_path = key.gsub(%r{#{uri_match}\.\d+?\/}, '')
-        if File.exist?("#{pkg[:dest]}/#{pkg[:name]}/#{file_path}")
-          in_sync = false unless File.size("#{pkg[:dest]}/#{pkg[:name]}/#{file_path}").to_i == value.to_i
+      dps.each do |dp|
+        next unless dp[:name] == pkg[:dp]
+        pkg_proto = dp[:ssl] ? 'https' : 'http'
+        pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{pkg[:name]}"
+        case dp[:auth]
+        when 'none'
+          list_of_files = recursive_download_list(pkg_uri)
+        when 'windows'
+          list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])          
         else
-          in_sync = false
+          raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
         end
+        in_sync = true
+        list_of_files.each do |key, value|
+          uri_match = pkg_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
+          file_path = key.gsub(%r{#{uri_match}\.\d+?\/}, '')
+          if File.exist?("#{pkg[:dest]}/#{pkg[:name]}/#{file_path}")
+            in_sync = false unless File.size("#{pkg[:dest]}/#{pkg[:name]}/#{file_path}").to_i == value.to_i
+          else
+            in_sync = false
+          end
+        end
+        pkg[:sync_content] = in_sync
       end
-      pkg[:sync_content] = in_sync
       pkg
     end
   end
 
   def create(context, name, should)
     context.notice("SCCM package '#{name}' with #{should.inspect}")
-    File.write("#{@confdir}/#{name}.yaml", should.to_yaml)
+    File.write("#{@confdir}/#{name}.pkg.yaml", should.to_yaml)
     sync_contents(context, name, should)
   end
 
   def update(context, name, should)
     context.notice("SCCM package '#{name}' with #{should.inspect}")
-    pkg = YAML.load_file("#{@confdir}/#{name}.yaml")
+    pkg = YAML.load_file("#{@confdir}/#{name}.pkg.yaml")
     new_pkg = pkg.merge(should)
     remove_dir("#{pkg[:dest]}/#{name}") unless pkg[:dest] == new_pkg[:dest]
-    File.write("#{@confdir}/#{name}.yaml", new_pkg.to_yaml)
+    File.write("#{@confdir}/#{name}.pkg.yaml", new_pkg.to_yaml)
     sync_contents(context, name, should)
   end
 
   def delete(context, name)
     context.notice("SCCM package '#{name}'")
-    pkg = YAML.load_file("#{@confdir}/#{name}.yaml")
+    pkg = YAML.load_file("#{@confdir}/#{name}.pkg.yaml")
     remove_dir("#{pkg[:dest]}/#{name}")
-    File.delete("#{@confdir}/#{name}.yaml")
+    File.delete("#{@confdir}/#{name}.pkg.yaml")
   end
 
   def sync_contents(context, name, should)
-    pkg_uri = "http://#{should[:dp]}/SMS_DP_SMSPKG$/#{name}"
-    list_of_files = recursive_download_list(pkg_uri)
-    list_of_files.each do |key, value|
-      uri_match = pkg_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
-      file_path = key.gsub(%r{#{uri_match}\.\d+?\/}, '')
-      Puppet::FileSystem.dir_mkpath("#{should[:dest]}/#{name}/#{file_path}")
-      download = false
-      if ! File.exist?("#{should[:dest]}/#{name}/#{file_path}")
-        download = true
+    dp_files = Dir["#{@confdir}/*.dp.yaml"]
+    dps = dp_files.map { |dp| YAML.load_file(dp) }
+    dps.each do |dp|
+      next unless dp[:name] == should[:dp]
+      pkg_proto = dp[:ssl] ? 'https' : 'http'
+      pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{name}"
+      case dp[:auth]
+      when 'none'
+        list_of_files = recursive_download_list(pkg_uri)
+      when 'windows'
+        list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])          
       else
-        if ! File.size("#{should[:dest]}/#{name}/#{file_path}") == value
+        raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
+      end
+      list_of_files.each do |key, value|
+        uri_match = pkg_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
+        file_path = key.gsub(%r{#{uri_match}\.\d+?\/}, '')
+        Puppet::FileSystem.dir_mkpath("#{should[:dest]}/#{name}/#{file_path}")
+        download = false
+        if ! File.exist?("#{should[:dest]}/#{name}/#{file_path}")
           download = true
+        else
+          if ! File.size("#{should[:dest]}/#{name}/#{file_path}") == value
+            download = true
+          end
+        end
+        case dp[:auth]
+        when 'none'
+          http_download(context, key, "#{should[:dest]}/#{name}/#{file_path}") if download
+        when 'windows'
+          http_download(context, key, "#{should[:dest]}/#{name}/#{file_path}", 'windows', dp[:username], dp[:domain], dp[:password]) if download
+        else
+          raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
         end
       end
-      http_download(context, key, "#{should[:dest]}/#{name}/#{file_path}") if download
     end
   end
 
@@ -91,16 +125,17 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     end
   end
 
-  def recursive_download_list(uri)
+  def recursive_download_list(uri, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
     result = {}
-    head = make_request(uri, :head)
-    if head['Content-Length'].to_i.positive?
+    head = make_request(uri, :head, auth_type, auth_user, auth_domain, auth_password)
+    raise Puppet::ResourceError, "Failed to connect to SCCM Distribution Point! Got error #{head.code}, #{head.message}" unless head.code.to_i == 200
+    if head['Content-Length'].to_i.positive? && head['Content-Type'] == 'application/octet-stream'
       result[uri] = head['Content-Length']
     elsif head['Content-Length'].to_i.zero?
-      response = make_request(uri, :get)
+      response = make_request(uri, :get, auth_type, auth_user, auth_domain, auth_password)
       links = response.body.scan(%r{<a href="(.+?)">})
       links.each do |link|
-        lookup = recursive_download_list(link[0])
+        lookup = recursive_download_list(link[0], auth_type, auth_user, auth_domain, auth_password)
         lookup.each do |key, value|
           result[key] = value
         end
@@ -109,12 +144,13 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     result
   end
 
-  def make_request(endpoint, type)
+  def make_request(endpoint, type, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
     uri = URI.parse(endpoint)
 
     connection = Net::HTTP.new(uri.host, uri.port)
     if uri.scheme == 'https'
       connection.use_ssl = true
+      connection.verify_mode = OpenSSL::SSL::VERIFY_NONE
     end
 
     connection.read_timeout = 60
@@ -133,6 +169,9 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
           request = Net::HTTP::Head.new(uri.request_uri)
         else
           raise Puppet::Error, "sccm_package#make_request called with invalid request type #{type}"
+        end
+        if auth_type == 'windows'
+          request.ntlm_auth(auth_user, auth_domain, auth_password)
         end
         request.method
         response = connection.request(request)
@@ -154,14 +193,20 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     end
   end
 
-  def http_download(context, resource, filename)
+  def http_download(context, resource, filename, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
     uri = URI(resource)
     context.notice("Downloading SCCM package file: #{uri}")
     http_object = Net::HTTP.new(uri.host, uri.port)
-    http_object.use_ssl = true if uri.scheme == 'https'
+    if uri.scheme == 'https'
+      http_object.use_ssl = true
+      http_object.verify_mode = OpenSSL::SSL::VERIFY_NONE
+    end
     begin
       http_object.start do |http|
         request = Net::HTTP::Get.new uri
+        if auth_type == 'windows'
+          request.ntlm_auth(auth_user, auth_domain, auth_password)
+        end
         http.read_timeout = 60
         http.request request do |response|
           open filename, 'wb' do |io|
