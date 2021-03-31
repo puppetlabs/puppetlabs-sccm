@@ -15,7 +15,7 @@ class Puppet::Provider::SccmDp::SccmDp < Puppet::ResourceApi::SimpleProvider
     dp_files = Dir["#{@confdir}/*.dp.yaml"]
     dps = dp_files.map { |dp| YAML.load_file(dp) }
     dps.map do |dp|
-      dp[:password] = Puppet::Pops::Types::PSensitiveType::Sensitive.new(dp[:password])
+      dp[:password] = dp[:password].unwrap unless dp[:password].is_a?(String)
       dp
     end
   end

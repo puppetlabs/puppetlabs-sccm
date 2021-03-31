@@ -36,14 +36,12 @@ DOC
     username: {
       type: 'Optional[String]',
       desc: 'Username for Windows Authentication (HTTP) to the SCCM Distribution Point.',
-      behaviour: :parameter,
       mandatory_for_get: false,
       mandatory_for_set: false,
     },
     domain: {
       type: 'Optional[String]',
       desc: 'Domain name (NetBIOS) for Windows Authentication (HTTP) to the SCCM Distribution Point.',
-      behaviour: :parameter,
       mandatory_for_get: false,
       mandatory_for_set: false,
     },
@@ -51,7 +49,6 @@ DOC
       type: 'Optional[Variant[String,Sensitive[String]]]',
       sensitive: true,
       desc: 'Password for Windows Authentication (HTTP) to the SCCM Distribution Point.',
-      behaviour: :parameter,
       mandatory_for_get: false,
       mandatory_for_set: false,
     },
