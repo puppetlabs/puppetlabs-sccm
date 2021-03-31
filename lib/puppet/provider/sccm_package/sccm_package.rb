@@ -121,7 +121,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
       end
       Dir.delete(path)
     else
-      File.delete(path)
+      File.delete(path) if File.exist?(path)
     end
   end
 
