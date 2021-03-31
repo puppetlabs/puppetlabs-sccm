@@ -3,8 +3,8 @@
 require 'puppet/resource_api/simple_provider'
 require 'yaml'
 require 'net/http'
-require 'ntlm/http'
 require 'uri'
+require 'ruby-ntlm/ntlm/http'
 
 # Implementation for the sccm_package type using the Resource API.
 class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimpleProvider
