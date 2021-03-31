@@ -34,19 +34,23 @@ DOC
       default: 'none',
     },
     username: {
-      type: 'String',
+      type: 'Optional[String]',
       desc: 'Username for Windows Authentication (HTTP) to the SCCM Distribution Point.',
-      default: '',
+      mandatory_for_get: false,
+      mandatory_for_set: false,
     },
     domain: {
-      type: 'String',
+      type: 'Optional[String]',
       desc: 'Domain name (NetBIOS) for Windows Authentication (HTTP) to the SCCM Distribution Point.',
-      default: '',
+      mandatory_for_get: false,
+      mandatory_for_set: false,
     },
     password: {
-      type: 'String',
+      type: 'Optional[Variant[String,Sensitive[String]]]', # Sensitive does not currently work
+      sensitive: true,
       desc: 'Password for Windows Authentication (HTTP) to the SCCM Distribution Point.',
-      default: '',
+      mandatory_for_get: false,
+      mandatory_for_set: false,
     },
     ssl: {
       type: 'Boolean',

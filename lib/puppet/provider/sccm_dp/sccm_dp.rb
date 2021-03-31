@@ -11,28 +11,31 @@ class Puppet::Provider::SccmDp::SccmDp < Puppet::ResourceApi::SimpleProvider
   end
 
   def get(context)
-    context.debug('Returning pre-canned example data')
+    context.debug('Collecting SCCM Distribution Point configuration resources')
     dp_files = Dir["#{@confdir}/*.dp.yaml"]
     dps = dp_files.map { |dp| YAML.load_file(dp) }
     dps.map do |dp|
+      dp[:password] = dp[:password].unwrap if dp[:password].is_a?(Puppet::Pops::Types::PSensitiveType::Sensitive)
       dp
     end
   end
 
   def create(context, name, should)
-    context.notice("Creating '#{name}' with #{should.inspect}")
+    context.notice("Creating SCCM Distribution Point configuration resource '#{name}'")
+    should[:password] = should[:password].unwrap if should[:password].is_a?(Puppet::Pops::Types::PSensitiveType::Sensitive)
     File.write("#{@confdir}/#{name}.dp.yaml", should.to_yaml)
   end
 
   def update(context, name, should)
-    context.notice("Updating '#{name}' with #{should.inspect}")
+    context.notice("Updating SCCM Distribution Point configuration resource '#{name}'")
+    should[:password] = should[:password].unwrap if should[:password].is_a?(Puppet::Pops::Types::PSensitiveType::Sensitive)
     dp = YAML.load_file("#{@confdir}/#{name}.dp.yaml")
     new_dp = dp.merge(should)
     File.write("#{@confdir}/#{name}.dp.yaml", new_dp.to_yaml)
   end
 
   def delete(context, name)
-    context.notice("Deleting '#{name}'")
+    context.notice("Deleting SCCM Distribution Point configuration resource '#{name}'")
     File.delete("#{@confdir}/#{name}.dp.yaml")
   end
 end

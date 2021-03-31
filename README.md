@@ -52,17 +52,17 @@ The above code will download the PRI00005 package from `http://sccmdp2.company.l
 Example for the same situation but now with authenticated HTTP access:
 
 ```puppet
-sccm_dp { 'sccmdp2.company.local':    # <-- FQDN of the SCCM distribution point
-  auth     => 'windows',              # <-- 'windows' for Windows authentication
-  username => 'svcSCCM',              # <-- Username for authentication
-  domain   => 'companyAD',            # <-- Domain name (NetBIOS) for authentication
-  password => 's3cr3tp@ss',          # <-- Password for authentication
+sccm_dp { 'sccmdp2.company.local':     # <-- FQDN of the SCCM distribution point
+  auth     => 'windows',               # <-- 'windows' for Windows authentication
+  username => 'svcSCCM',               # <-- Username for authentication
+  domain   => 'companyAD',             # <-- Domain name (NetBIOS) for authentication
+  password => Sensitive('s3cr3tp@ss'), # <-- Password for authentication
 }
 
-sccm_package{ 'PRI00005':             # <-- PRI00005 is the SCCM package ID
+sccm_package{ 'PRI00005':              # <-- PRI00005 is the SCCM package ID
   ensure => present,
-  dp     => 'sccmdp2.company.local',  # <-- Must match name of sccm_dp resource
-  dest   => 'C:\Windows\Temp\Pkg'     # <-- Folder in which to store packages
+  dp     => 'sccmdp2.company.local',   # <-- Must match name of sccm_dp resource
+  dest   => 'C:\Windows\Temp\Pkg'      # <-- Folder in which to store packages
 }
 ```
 
@@ -201,5 +201,6 @@ This will cause WinRAR and Notepad++ to get installed by downloading their respe
 
 ## Limitations
 
-This module currently does not provide support for SCCM Distribution Points running in HTTPS mode.
-This module was tested against Microsoft Endpoint Configuration Manager, build 2002. 
+* This module does not currently support passing the value to the `password` parameter of a `sccm_dp` resource as a `Sensitive` datatype. A change in the Puppet Resource API is needed to enable this scenario properly. Once the Resource API is updated, a new version of this module will be released that supports passing a Sensitive value.
+* This module currently does not provide support for SCCM Distribution Points running in HTTPS mode.
+* This module was tested against Microsoft Endpoint Configuration Manager, build 2002. 
