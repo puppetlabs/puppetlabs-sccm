@@ -159,7 +159,7 @@ class profile::sccm_packages(
     auth     => $dp_configs[$dp]['auth'],
     username => $dp_configs[$dp]['username'],
     domain   => $dp_configs[$dp]['domain'],
-    password => Sensitive($dp_configs[$dp]['password']),
+    password => $dp_configs[$dp]['password'],
   }
 
   $pkgs = lookup('sccm::packages')
@@ -201,5 +201,6 @@ This will cause WinRAR and Notepad++ to get installed by downloading their respe
 
 ## Limitations
 
-This module currently does not provide support for SCCM Distribution Points running in HTTPS mode.
-This module was tested against Microsoft Endpoint Configuration Manager, build 2002. 
+* This module does not currently support passing the value to the `password` parameter of a `sccm_dp` resource as a `Sensitive` datatype. A change in the Puppet Resource API is needed to enable this scenario properly. Once the Resource API is updated, a new version of this module will be released that supports passing a Sensitive value.
+* This module currently does not provide support for SCCM Distribution Points running in HTTPS mode.
+* This module was tested against Microsoft Endpoint Configuration Manager, build 2002. 
