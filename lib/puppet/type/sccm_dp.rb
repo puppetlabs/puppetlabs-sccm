@@ -29,7 +29,7 @@ DOC
       behaviour: :namevar,
     },
     auth: {
-      type: 'Enum[none, windows, pki]',
+      type: 'Enum[none, windows]',
       desc: 'Type of authentication the SCCM Distribution Point requires.',
       default: 'none',
     },
@@ -50,7 +50,7 @@ DOC
     },
     ssl: {
       type: 'Boolean',
-      desc: 'Whether the SCCM Distribution Point requires HTTP or HTTPS.',
+      desc: 'Whether the SCCM Distribution Point requires HTTP or HTTPS. Currently only HTTP is supported.',
       default: false,
     },
   },

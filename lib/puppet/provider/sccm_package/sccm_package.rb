@@ -106,7 +106,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
         when 'windows'
           http_download(context, key, "#{should[:dest]}/#{name}/#{file_path}", 'windows', dp[:username], dp[:domain], dp[:password]) if download
         else
-          raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
+          raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none' and 'windows'."
         end
       end
     end
