@@ -29,7 +29,7 @@ DOC
       behaviour: :namevar,
     },
     auth: {
-      type: 'Enum[none, windows]',
+      type: 'Enum[none, windows, certauth]',
       desc: 'Type of authentication the SCCM Distribution Point requires.',
       default: 'none',
     },
@@ -54,8 +54,14 @@ DOC
     },
     ssl: {
       type: 'Boolean',
-      desc: 'Whether the SCCM Distribution Point requires HTTP or HTTPS. Currently only HTTP is supported.',
+      desc: 'Whether the SCCM Distribution Point requires HTTP or HTTPS.',
       default: false,
+    },
+    issuer: {
+      type: 'Optional[String]',
+      desc: 'Name of the certificate issuer to filter on for selecting a suitable client certificate for HTTPS authentication.',
+      mandatory_for_get: false,
+      mandatory_for_set: false,
     },
   },
 )

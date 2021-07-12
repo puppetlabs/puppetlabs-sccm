@@ -4,7 +4,8 @@ require 'puppet/resource_api/simple_provider'
 require 'yaml'
 require 'net/http'
 require 'uri'
-require 'ruby-ntlm/ntlm/http'
+require 'sccm/ruby-ntlm/ntlm/http'
+require 'sccm/win32-certstore/win32-certstore'
 
 # Implementation for the sccm_package type using the Resource API.
 class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimpleProvider
@@ -31,7 +32,9 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
         when 'none'
           list_of_files = recursive_download_list(pkg_uri)
         when 'windows'
-          list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])          
+          list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])
+        when 'certauth'
+          select_client_certificate(dp[:issuer])
         else
           raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
         end
@@ -73,6 +76,13 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     File.delete("#{@confdir}/#{name}.pkg.yaml")
   end
 
+  def select_client_certificate(issuer)
+    Win32::Certstore.open('My') do |store|
+      store.list
+      # store.search(search_token)
+    end
+  end
+
   def sync_contents(context, name, should)
     dp_files = Dir["#{@confdir}/*.dp.yaml"]
     dps = dp_files.map { |dp| YAML.load_file(dp) }
@@ -84,7 +94,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
       when 'none'
         list_of_files = recursive_download_list(pkg_uri)
       when 'windows'
-        list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])          
+        list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])
       else
         raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
       end
