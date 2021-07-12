@@ -40,7 +40,7 @@ module Win32
 
         def cert_all_ps_cmd(store_location: "LocalMachine", store_name: "My")
           <<-EOH
-            $certs = Get-ChildItem Cert:\\#{store_location}\\#{store_name} -Recurse }
+            $certs = Get-ChildItem Cert:\\#{store_location}\\#{store_name} -Recurse
             $pems = @()
             $certs | ForEach {
                 $content = $null
@@ -54,7 +54,7 @@ module Win32
                 }
                 $pems += $content
             }
-            $pems | ConvertTo-Json 
+            $pems | ConvertTo-Json
           EOH
         end
 

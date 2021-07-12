@@ -78,7 +78,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
 
   def select_client_certificate(issuer)
     Win32::Certstore.open('My') do |store|
-      store.list
+      puts store.get_all
       # store.search(search_token)
     end
   end
