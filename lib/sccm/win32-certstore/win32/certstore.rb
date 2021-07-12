@@ -78,6 +78,12 @@ module Win32
       cert_get(certificate_thumbprint, store_name: store_name, store_location: store_location)
     end
 
+    # Return array of all `OpenSSL::X509` certificate objects in store
+    # @return [Object] of certificates in OpenSSL::X509 format
+    def get_all(store_name: @store_name, store_location: @store_location)
+      cert_get_all(store_name: store_name, store_location: store_location)
+    end
+
     # Returns all the certificates in a store
     # @param [nil]
     # @return [Array] array of certificates list

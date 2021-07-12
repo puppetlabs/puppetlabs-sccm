@@ -17,7 +17,6 @@
 
 require_relative "mixin/crypto"
 require_relative "mixin/string"
-# require_relative "mixin/shell_exec"
 require_relative "mixin/unicode"
 require "openssl" unless defined?(OpenSSL)
 require "json" unless defined?(JSON)
@@ -99,6 +98,23 @@ module Win32
         unless cert_pem.empty?
           build_openssl_obj(cert_pem)
         end
+      end
+
+      # Get all certificates from open certificate store and return as array of certificate objects
+      def cert_get_all(store_name:, store_location:)
+        certs_pem = get_cert_all_pem(store_name: store_name, store_location: store_location)
+        certs_array = []
+        certs_pem.each do |cert_pem|
+          cert_pem = format_pem(cert_pem)
+          if cert_pem.empty?
+            raise ArgumentError, 'Unable to retrieve the certificate'
+          end
+
+          unless cert_pem.empty?
+            certs_array << build_openssl_obj(cert_pem)
+          end
+        end
+        certs_array
       end
 
       # Listing certificate of open certstore and return list in json
@@ -243,6 +259,20 @@ module Win32
         sysroot = ENV['SystemRoot']
         powershell = "#{sysroot}\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
         get_data = Puppet::Util::Execution.execute("#{powershell} -NoLogo -NonInteractive -NoProfile -ExecutionPolicy Unrestricted -InputFormat None -Command #{cert_ps_cmd(thumbprint, store_location: converted_store, store_name: store_name)}")
+        get_data
+      end
+
+      # Get certificate pem
+      def get_cert_all_pem(store_name:, store_location:)
+        converted_store = if store_location == CERT_SYSTEM_STORE_LOCAL_MACHINE
+                            "LocalMachine"
+                          else
+                            "CurrentUser"
+                          end
+        sysroot = ENV['SystemRoot']
+        powershell = "#{sysroot}\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
+        get_data = Puppet::Util::Execution.execute("#{powershell} -NoLogo -NonInteractive -NoProfile -ExecutionPolicy Unrestricted -InputFormat None -Command #{cert_all_ps_cmd(store_location: converted_store, store_name: store_name)}")
+        get_data = JSON.parse(get_data)
         get_data
       end
 

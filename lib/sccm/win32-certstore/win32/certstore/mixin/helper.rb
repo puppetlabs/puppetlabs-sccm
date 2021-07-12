@@ -23,7 +23,7 @@ module Win32
       module Helper
         def cert_ps_cmd(thumbprint, store_location: "LocalMachine", store_name: "My")
           <<-EOH
-            $cert = Get-ChildItem Cert:\\#{store_location}\\#{store_name} -Recurse | Where { $_.Thumbprint -eq "#{thumbprint}" }
+            $cert = Get-ChildItem Cert:\\#{store_location}\\#{store_name} -Recurse | Where { $_.Thumbprint -eq '"#{thumbprint}"' }
 
             $content = $null
             if($null -ne $cert)
@@ -35,6 +35,26 @@ module Win32
               )
             }
             $content
+          EOH
+        end
+
+        def cert_all_ps_cmd(store_location: "LocalMachine", store_name: "My")
+          <<-EOH
+            $certs = Get-ChildItem Cert:\\#{store_location}\\#{store_name} -Recurse }
+            $pems = @()
+            $certs | ForEach {
+                $content = $null
+                if($null -ne $_)
+                {
+                    $content = @(
+                    '-----BEGIN CERTIFICATE-----'
+                    [System.Convert]::ToBase64String($_.RawData, 'InsertLineBreaks')
+                    '-----END CERTIFICATE-----'
+                    )
+                }
+                $pems += $content
+            }
+            $pems | ConvertTo-Json 
           EOH
         end
 
