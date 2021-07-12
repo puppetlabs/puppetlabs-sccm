@@ -46,11 +46,7 @@ module Win32
                 $content = $null
                 if($null -ne $_)
                 {
-                    $content = @(
-                    '-----BEGIN CERTIFICATE-----'
-                    [System.Convert]::ToBase64String($_.RawData, 'InsertLineBreaks')
-                    '-----END CERTIFICATE-----'
-                    )
+                  $content = "-----BEGIN CERTIFICATE-----`r`n$([System.Convert]::ToBase64String($_.RawData, 'InsertLineBreaks'))`r`n-----END CERTIFICATE-----"
                 }
                 $pems += $content
             }
