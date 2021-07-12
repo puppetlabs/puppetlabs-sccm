@@ -28,7 +28,7 @@ module Win32
       include Win32::Certstore::Mixin::Crypto
       include Win32::Certstore::Mixin::Assertions
       include Win32::Certstore::Mixin::String
-      include Win32::Certstore::Mixin::ShellExec
+      # include Win32::Certstore::Mixin::ShellExec
       include Win32::Certstore::Mixin::Unicode
       include Win32::Certstore::Mixin::Helper
 
