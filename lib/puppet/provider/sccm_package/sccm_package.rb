@@ -5,7 +5,6 @@ require 'yaml'
 require 'net/http'
 require 'uri'
 require 'sccm/ruby-ntlm/ntlm/http'
-require 'sccm/win32-certstore/win32-certstore'
 
 # Implementation for the sccm_package type using the Resource API.
 class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimpleProvider
@@ -77,10 +76,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
   end
 
   def select_client_certificate(issuer)
-    Win32::Certstore.open('My') do |store|
-      puts store.get_all
-      # store.search(search_token)
-    end
+    puts cert_get_all('LocalMachine', 'My', issuer)
   end
 
   def sync_contents(context, name, should)
@@ -230,5 +226,61 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
       raise Puppet::ResourceError, "Error downloading #{resource}: '#{e}'"
     end
     context.debug("Stored download as #{filename}.")
+  end
+
+  # Get all certificates from open certificate store and return as array of certificate objects
+  def cert_get_all(store_name = 'LocalMachine', store_location = 'My', issuer = nil)
+    certs_pem = get_cert_all_pem(store_name, store_location, issuer)
+    certs_array = []
+    certs_pem.each do |cert_pem|
+      cert_pem = format_pem(cert_pem)
+      if cert_pem.empty?
+        raise ArgumentError, 'Unable to retrieve the certificate'
+      end
+
+      unless cert_pem.empty?
+        certs_array << build_openssl_obj(cert_pem)
+      end
+    end
+    certs_array
+  end
+
+  # Get certificate pem
+  def get_cert_all_pem(store_name, store_location, issuer)
+    sysroot = ENV['SystemRoot']
+    powershell = "#{sysroot}\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    get_data = Puppet::Util::Execution.execute("#{powershell} -NoLogo -NonInteractive -NoProfile -ExecutionPolicy Unrestricted -InputFormat None -Command #{cert_all_ps_cmd(store_location, store_name, issuer)}")
+    get_data = JSON.parse(get_data)
+    get_data
+  end
+
+  def cert_all_ps_cmd(store_location, store_name, issuer)
+    issuer = '*' if issuer.empty?
+    <<-EOH
+      $certs = Get-ChildItem Cert:\\#{store_location}\\#{store_name} -Recurse | Where { ($_.Issuer -like 
+        'CN="""#{issuer}"""') -and ( ($_.Subject -eq 
+        'CN=' + (Get-WmiObject win32_computersystem).DNSHostName -or ($_.Subject -eq 
+        'CN=' + (Get-WmiObject win32_computersystem).DNSHostName+'.'+(Get-WmiObject win32_computersystem).Domain)) ) }     
+      $pems = @()
+      $certs | ForEach {
+          $content = $null
+          if($null -ne $_)
+          {
+            $content = """-----BEGIN CERTIFICATE-----`r`n$([System.Convert]::ToBase64String($_.RawData, 'InsertLineBreaks'))`r`n-----END CERTIFICATE-----"""
+          }
+          $pems += $content
+      }
+      ConvertTo-Json($pems)
+    EOH
+  end
+
+  # Format pem
+  def format_pem(cert_pem)
+    cert_pem.delete("\r")
+  end
+
+  # Build pem to OpenSSL::X509::Certificate object
+  def build_openssl_obj(cert_pem)
+    OpenSSL::X509::Certificate.new(cert_pem)
   end
 end
