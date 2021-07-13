@@ -76,7 +76,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
   end
 
   def select_client_certificate(issuer)
-    puts cert_get_all('LocalMachine', 'My', issuer)
+    puts cert_get_all('My', 'LocalMachine', issuer)
   end
 
   def sync_contents(context, name, should)
@@ -229,7 +229,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
   end
 
   # Get all certificates from open certificate store and return as array of certificate objects
-  def cert_get_all(store_name = 'LocalMachine', store_location = 'My', issuer = nil)
+  def cert_get_all(store_name = 'My', store_location = 'LocalMachine', issuer = nil)
     certs_pem = get_cert_all_pem(store_name, store_location, issuer)
     certs_array = []
     certs_pem.each do |cert_pem|
