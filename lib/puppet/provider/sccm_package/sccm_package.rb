@@ -33,7 +33,8 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
         when 'windows'
           list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])
         when 'certauth'
-          select_client_certificate(dp[:issuer])
+          cert = select_client_certificate(dp[:issuer])
+          list_of_files = recursive_download_list(pkg_uri, 'certauth', nil, nil, nil, cert)
         else
           raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
         end
@@ -77,6 +78,8 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
 
   def select_client_certificate(issuer)
     puts cert_get_all('My', 'LocalMachine', issuer)
+    $certs = cert_get_all('My', 'LocalMachine', issuer)
+    $certs[0]
   end
 
   def sync_contents(context, name, should)
@@ -131,7 +134,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     end
   end
 
-  def recursive_download_list(uri, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
+  def recursive_download_list(uri, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil, cert = nil)
     result = {}
     head = make_request(uri, :head, auth_type, auth_user, auth_domain, auth_password)
     raise Puppet::ResourceError, "Failed to connect to SCCM Distribution Point! Got error #{head.code}, #{head.message}" unless head.code.to_i == 200
@@ -257,10 +260,10 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
   def cert_all_ps_cmd(store_location, store_name, issuer)
     issuer = '*' if issuer.empty?
     <<-EOH
-      $certs = Get-ChildItem Cert:\\#{store_location}\\#{store_name} -Recurse | Where { ($_.Issuer -like 
-        'CN="""#{issuer}"""') -and ( ($_.Subject -eq 
-        'CN=' + (Get-WmiObject win32_computersystem).DNSHostName -or ($_.Subject -eq 
-        'CN=' + (Get-WmiObject win32_computersystem).DNSHostName+'.'+(Get-WmiObject win32_computersystem).Domain)) ) }     
+      [DateTime] $ValidThrough = (Get-Date) + (New-TimeSpan -Hours 1)
+      $certs = Get-ChildItem Cert:\\#{store_location}\\#{store_name} -Recurse -DNSName """$($Env:COMPUTERNAME)*""" -EKU '*Client Authentication*' | Where {
+          ($_.Issuer -like 'CN="""#{issuer}"""') -and ($_.NotAfter -gt $ValidThrough)
+      }
       $pems = @()
       $certs | ForEach {
           $content = $null
