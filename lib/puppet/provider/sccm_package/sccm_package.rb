@@ -34,7 +34,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
         when 'windows'
           list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])
         when 'pki'
-          build_x509_cert(dp[:pfx])
+          build_x509_cert(dp[:pfx], dp[:pfx_password])
           list_of_files = recursive_download_list(pkg_uri, 'pki')
         else
           raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
@@ -90,7 +90,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
       when 'windows'
         list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])
       when 'pki'
-        build_x509_cert(dp[:pfx])
+        build_x509_cert(dp[:pfx], dp[:pfx_password])
         list_of_files = recursive_download_list(pkg_uri, 'pki')
       else
         raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
@@ -144,6 +144,11 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
       links.each do |link|
         lookup = recursive_download_list(link[0], auth_type, auth_user, auth_domain, auth_password)
         lookup.each do |key, value|
+          if auth_type == 'pki'
+            uri = URI.parse(key)
+            uri.scheme = 'https'
+            key = uri.to_s
+          end
           result[key] = value
         end
       end
@@ -152,13 +157,13 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
   end
 
   # Build OpenSSL::X509::Certificate object from OpenSSL::PKCS12 object
-  def build_x509_cert(pfx)
+  def build_x509_cert(pfx, pfx_password)
     return unless @pfx_cert.empty?
 
-    pkcs12 = OpenSSL::PKCS12.new(File.binread(pfx))
+    pkcs12 = OpenSSL::PKCS12.new(File.binread(pfx), pfx_password)
     @pfx_cert = {
-      cert => OpenSSL::X509::Certificate.new(pkcs12.certificate.to_s.gsub!(%r{\n}, '\n')),
-      key  => OpenSSL::PKey::RSA.new(pkcs12.key.to_s.gsub!(%r{\n}, '\n'))
+      'cert' => OpenSSL::X509::Certificate.new(pkcs12.certificate.to_pem),
+      'key'  => OpenSSL::PKey::RSA.new(pkcs12.key.to_pem)
     }
   end
 
