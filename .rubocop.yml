@@ -12,6 +12,7 @@ AllCops:
   - ".vendor/**/*"
   - "**/Gemfile"
   - "**/Rakefile"
+  - lib/sccm/ruby-ntlm/*
   - pkg/**/*
   - spec/fixtures/**/*
   - vendor/**/*
