@@ -32,9 +32,8 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
           list_of_files = recursive_download_list(pkg_uri)
         when 'windows'
           list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])
-        when 'certauth'
-          cert = select_client_certificate(dp[:issuer])
-          list_of_files = recursive_download_list(pkg_uri, 'certauth', nil, nil, nil, cert)
+        when 'pki'
+          list_of_files = recursive_download_list(pkg_uri, 'pki', pfx: dp[:pfx])
         else
           raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
         end
@@ -94,6 +93,8 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
         list_of_files = recursive_download_list(pkg_uri)
       when 'windows'
         list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])
+      when 'pki'
+        list_of_files = recursive_download_list(pkg_uri, 'pki', pfx: dp[:pfx])
       else
         raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
       end
@@ -102,20 +103,20 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
         file_path = key.gsub(%r{#{uri_match}\.\d+?\/}, '')
         Puppet::FileSystem.dir_mkpath("#{should[:dest]}/#{name}/#{file_path}")
         download = false
-        if ! File.exist?("#{should[:dest]}/#{name}/#{file_path}")
+        if !File.exist?("#{should[:dest]}/#{name}/#{file_path}")
           download = true
-        else
-          if ! File.size("#{should[:dest]}/#{name}/#{file_path}") == value
-            download = true
-          end
+        elsif !File.size("#{should[:dest]}/#{name}/#{file_path}") == value
+          download = true
         end
         case dp[:auth]
         when 'none'
           http_download(context, key, "#{should[:dest]}/#{name}/#{file_path}") if download
         when 'windows'
           http_download(context, key, "#{should[:dest]}/#{name}/#{file_path}", 'windows', dp[:username], dp[:domain], dp[:password]) if download
+        when 'pki'
+          http_download(context, key, "#{should[:dest]}/#{name}/#{file_path}", 'pki', pfx: dp[:pfx]) if download
         else
-          raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none' and 'windows'."
+          raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
         end
       end
     end
@@ -124,27 +125,27 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
   def remove_dir(path)
     if File.directory?(path)
       Dir.foreach(path) do |file|
-        if ((file.to_s != ".") and (file.to_s != ".."))
+        if (file.to_s != '.') && (file.to_s != '..')
           remove_dir("#{path}/#{file}")
         end
       end
       Dir.delete(path)
-    else
-      File.delete(path) if File.exist?(path)
+    elsif File.exist?(path)
+      File.delete(path)
     end
   end
 
-  def recursive_download_list(uri, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil, cert = nil)
+  def recursive_download_list(uri, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil, pfx = nil)
     result = {}
-    head = make_request(uri, :head, auth_type, auth_user, auth_domain, auth_password)
+    head = make_request(uri, :head, auth_type, auth_user, auth_domain, auth_password, pfx)
     raise Puppet::ResourceError, "Failed to connect to SCCM Distribution Point! Got error #{head.code}, #{head.message}" unless head.code.to_i == 200
     if head['Content-Length'].to_i.positive? && head['Content-Type'] == 'application/octet-stream'
       result[uri] = head['Content-Length']
     elsif head['Content-Length'].to_i.zero?
-      response = make_request(uri, :get, auth_type, auth_user, auth_domain, auth_password)
+      response = make_request(uri, :get, auth_type, auth_user, auth_domain, auth_password, pfx)
       links = response.body.scan(%r{<a href="(.+?)">})
       links.each do |link|
-        lookup = recursive_download_list(link[0], auth_type, auth_user, auth_domain, auth_password)
+        lookup = recursive_download_list(link[0], auth_type, auth_user, auth_domain, auth_password, pfx)
         lookup.each do |key, value|
           result[key] = value
         end
@@ -153,13 +154,29 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     result
   end
 
-  def make_request(endpoint, type, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
+  # Build OpenSSL::X509::Certificate object from OpenSSL::PKCS12 object
+  def build_x509_cert(pfx)
+    pkcs12 = OpenSSL::PKCS12.new(File.binread(pfx))
+    cert = {
+      cert => OpenSSL::X509::Certificate.new(pkcs12.certificate.to_s.gsub!(%r{\n}, '\n')),
+      key  => OpenSSL::PKey::RSA.new(pkcs12.key.to_s.gsub!(%r{\n}, '\n'))
+    }
+    cert
+  end
+
+  def make_request(endpoint, type, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil, pfx = nil)
     uri = URI.parse(endpoint)
 
     connection = Net::HTTP.new(uri.host, uri.port)
     if uri.scheme == 'https'
       connection.use_ssl = true
       connection.verify_mode = OpenSSL::SSL::VERIFY_NONE
+    end
+
+    if auth_type == 'pki'
+      cert = build_x509_cert(pfx)
+      connection.cert = OpenSSL::X509::Certificate.new(cert['cert'])
+      connection.key  = OpenSSL::PKey::RSA.new(cert['key'])
     end
 
     connection.read_timeout = 60
@@ -179,9 +196,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
         else
           raise Puppet::Error, "sccm_package#make_request called with invalid request type #{type}"
         end
-        if auth_type == 'windows'
-          request.ntlm_auth(auth_user, auth_domain, auth_password)
-        end
+        request.ntlm_auth(auth_user, auth_domain, auth_password) if auth_type == 'windows'
         request.method
         response = connection.request(request)
       rescue SocketError => e
@@ -202,7 +217,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     end
   end
 
-  def http_download(context, resource, filename, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
+  def http_download(context, resource, filename, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil, pfx = nil)
     uri = URI(resource)
     context.notice("Downloading SCCM package file: #{uri}")
     http_object = Net::HTTP.new(uri.host, uri.port)
@@ -210,12 +225,15 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
       http_object.use_ssl = true
       http_object.verify_mode = OpenSSL::SSL::VERIFY_NONE
     end
+    if auth_type == 'pki'
+      cert = build_x509_cert(pfx)
+      http_object.cert = OpenSSL::X509::Certificate.new(cert['cert'])
+      http_object.key  = OpenSSL::PKey::RSA.new(cert['key'])
+    end
     begin
       http_object.start do |http|
         request = Net::HTTP::Get.new uri
-        if auth_type == 'windows'
-          request.ntlm_auth(auth_user, auth_domain, auth_password)
-        end
+        request.ntlm_auth(auth_user, auth_domain, auth_password) if auth_type == 'windows'
         http.read_timeout = 60
         http.request request do |response|
           open filename, 'wb' do |io|
@@ -229,61 +247,5 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
       raise Puppet::ResourceError, "Error downloading #{resource}: '#{e}'"
     end
     context.debug("Stored download as #{filename}.")
-  end
-
-  # Get all certificates from open certificate store and return as array of certificate objects
-  def cert_get_all(store_name = 'My', store_location = 'LocalMachine', issuer = nil)
-    certs_pem = get_cert_all_pem(store_name, store_location, issuer)
-    certs_array = []
-    certs_pem.each do |cert_pem|
-      cert_pem = format_pem(cert_pem)
-      if cert_pem.empty?
-        raise ArgumentError, 'Unable to retrieve the certificate'
-      end
-
-      unless cert_pem.empty?
-        certs_array << build_openssl_obj(cert_pem)
-      end
-    end
-    certs_array
-  end
-
-  # Get certificate pem
-  def get_cert_all_pem(store_name, store_location, issuer)
-    sysroot = ENV['SystemRoot']
-    powershell = "#{sysroot}\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
-    get_data = Puppet::Util::Execution.execute("#{powershell} -NoLogo -NonInteractive -NoProfile -ExecutionPolicy Unrestricted -InputFormat None -Command #{cert_all_ps_cmd(store_location, store_name, issuer)}")
-    get_data = JSON.parse(get_data)
-    get_data
-  end
-
-  def cert_all_ps_cmd(store_location, store_name, issuer)
-    issuer = '*' if issuer.empty?
-    <<-EOH
-      [DateTime] $ValidThrough = (Get-Date) + (New-TimeSpan -Hours 1)
-      $certs = Get-ChildItem Cert:\\#{store_location}\\#{store_name} -Recurse -DNSName """$($Env:COMPUTERNAME)*""" -EKU '*Client Authentication*' | Where {
-          ($_.Issuer -like 'CN="""#{issuer}"""') -and ($_.NotAfter -gt $ValidThrough)
-      }
-      $pems = @()
-      $certs | ForEach {
-          $content = $null
-          if($null -ne $_)
-          {
-            $content = """-----BEGIN CERTIFICATE-----`r`n$([System.Convert]::ToBase64String($_.RawData, 'InsertLineBreaks'))`r`n-----END CERTIFICATE-----"""
-          }
-          $pems += $content
-      }
-      ConvertTo-Json($pems)
-    EOH
-  end
-
-  # Format pem
-  def format_pem(cert_pem)
-    cert_pem.delete("\r")
-  end
-
-  # Build pem to OpenSSL::X509::Certificate object
-  def build_openssl_obj(cert_pem)
-    OpenSSL::X509::Certificate.new(cert_pem)
   end
 end

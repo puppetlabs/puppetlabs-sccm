@@ -29,7 +29,7 @@ DOC
       behaviour: :namevar,
     },
     auth: {
-      type: 'Enum[none, windows, certauth]',
+      type: 'Enum[none, windows, pki]',
       desc: 'Type of authentication the SCCM Distribution Point requires.',
       default: 'none',
     },
