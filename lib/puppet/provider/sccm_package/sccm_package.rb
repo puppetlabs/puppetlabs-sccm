@@ -169,6 +169,10 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
 
   def make_request(endpoint, type, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
     uri = URI.parse(endpoint)
+    if auth_type == 'pki'
+      uri.scheme = 'https'
+      uri = URI.parse(uri.to_s)
+    end
 
     connection = Net::HTTP.new(uri.host, uri.port)
     if uri.scheme == 'https'
@@ -221,6 +225,10 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
 
   def http_download(context, resource, filename, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
     uri = URI(resource)
+    if auth_type == 'pki'
+      uri.scheme = 'https'
+      uri = URI.parse(uri.to_s)
+    end
     context.notice("Downloading SCCM package file: #{uri}")
     http_object = Net::HTTP.new(uri.host, uri.port)
     if uri.scheme == 'https'
