@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## Release 0.3.0
+
+**Features**
+* Ability to download SCCM packages from SCCM distribution points over HTTPS with TLS client authentication
+
 ## Release 0.2.0
 
 **Features**

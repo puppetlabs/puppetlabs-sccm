@@ -1,6 +1,6 @@
 {
   "name": "puppetlabs-sccm",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "puppetlabs",
   "summary": "Download packages from SCCM distribution points",
   "license": "Apache-2.0",

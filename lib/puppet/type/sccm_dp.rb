@@ -14,6 +14,16 @@ sccm_dp { 'sccmdp1.company.local':
   password => 's3cr3t',
   ssl      => false
 }
+sccm_dp { 'sccmdp2.company.local':
+  auth => 'none',
+  ssl  => false
+}
+sccm_dp { 'sccmdp3.company.local':
+  auth         => 'pki',
+  ssl          => true,
+  pfx          => 'C:\\Windows\\Temp\\sccm_dp_access.pfx',
+  pfx_password => 'puppetlabs'
+}
 This type provides Puppet with the necessary information about distribution points
 DOC
   features: [],
@@ -29,7 +39,7 @@ DOC
       behaviour: :namevar,
     },
     auth: {
-      type: 'Enum[none, windows]',
+      type: 'Enum[none, windows, pki]',
       desc: 'Type of authentication the SCCM Distribution Point requires.',
       default: 'none',
     },
@@ -54,8 +64,21 @@ DOC
     },
     ssl: {
       type: 'Boolean',
-      desc: 'Whether the SCCM Distribution Point requires HTTP or HTTPS. Currently only HTTP is supported.',
+      desc: 'Whether the SCCM Distribution Point requires HTTP or HTTPS.',
       default: false,
+    },
+    pfx: {
+      type: 'Optional[String]',
+      desc: 'Path to a local PFX file for TLS Client Authentication. Required when auth = pki.',
+      mandatory_for_get: false,
+      mandatory_for_set: false,
+    },
+    pfx_password: {
+      type: 'Optional[Variant[String,Sensitive[String]]]', # Sensitive does not currently work
+      sensitive: true,
+      desc: 'Password for opening the PFX file for TLS Client Authentication. Required when auth = pki',
+      mandatory_for_get: false,
+      mandatory_for_set: false,
     },
   },
 )

@@ -12,6 +12,7 @@ AllCops:
   - ".vendor/**/*"
   - "**/Gemfile"
   - "**/Rakefile"
+  - lib/sccm/ruby-ntlm/**/*
   - pkg/**/*
   - spec/fixtures/**/*
   - vendor/**/*
@@ -206,6 +207,8 @@ Lint/RedundantWithIndex:
 Lint/RedundantWithObject:
   Enabled: false
 Lint/RegexpAsCondition:
+  Enabled: false
+Lint/RescueException:
   Enabled: false
 Lint/ReturnInVoidContext:
   Enabled: false
