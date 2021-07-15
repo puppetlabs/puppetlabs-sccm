@@ -160,7 +160,12 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
   def build_x509_cert(pfx, pfx_password)
     return unless @pfx_cert.empty?
 
-    pkcs12 = OpenSSL::PKCS12.new(File.binread(pfx), pfx_password)
+    raise Puppet::Error, "PFX file #{pfx} does not exist!" unless File.exist?(pfx)
+    begin
+      pkcs12 = OpenSSL::PKCS12.new(File.binread(pfx), pfx_password)
+    rescue
+      raise Puppet::Error, "Unable to import PFX file #{pfx}!"
+    end
     @pfx_cert = {
       'cert' => OpenSSL::X509::Certificate.new(pkcs12.certificate.to_pem),
       'key'  => OpenSSL::PKey::RSA.new(pkcs12.key.to_pem)
