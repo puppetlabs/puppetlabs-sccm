@@ -57,9 +57,15 @@ DOC
       desc: 'Whether the SCCM Distribution Point requires HTTP or HTTPS.',
       default: false,
     },
-    issuer: {
+    pfx: {
       type: 'Optional[String]',
-      desc: 'Name of the certificate issuer to filter on for selecting a suitable client certificate for HTTPS authentication.',
+      desc: 'Path to a local PFX file for TLS Client Authentication. Required when auth = pki.',
+      mandatory_for_get: false,
+      mandatory_for_set: false,
+    },
+    pfx_password: {
+      type: 'Optional[String]',
+      desc: 'Password for opening the PFX file for TLS Client Authentication. Required when auth = pki',
       mandatory_for_get: false,
       mandatory_for_set: false,
     },

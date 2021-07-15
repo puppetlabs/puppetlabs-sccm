@@ -12,6 +12,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     super
     @confdir = "#{Puppet['codedir']}/../sccm"
     Dir.mkdir @confdir unless File.directory?(@confdir)
+    @pfx_cert = {}
   end
 
   def get(context)
@@ -33,7 +34,8 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
         when 'windows'
           list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])
         when 'pki'
-          list_of_files = recursive_download_list(pkg_uri, 'pki', pfx: dp[:pfx])
+          build_x509_cert(dp[:pfx])
+          list_of_files = recursive_download_list(pkg_uri, 'pki')
         else
           raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
         end
@@ -75,12 +77,6 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     File.delete("#{@confdir}/#{name}.pkg.yaml")
   end
 
-  def select_client_certificate(issuer)
-    puts cert_get_all('My', 'LocalMachine', issuer)
-    $certs = cert_get_all('My', 'LocalMachine', issuer)
-    $certs[0]
-  end
-
   def sync_contents(context, name, should)
     dp_files = Dir["#{@confdir}/*.dp.yaml"]
     dps = dp_files.map { |dp| YAML.load_file(dp) }
@@ -94,7 +90,8 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
       when 'windows'
         list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])
       when 'pki'
-        list_of_files = recursive_download_list(pkg_uri, 'pki', pfx: dp[:pfx])
+        build_x509_cert(dp[:pfx])
+        list_of_files = recursive_download_list(pkg_uri, 'pki')
       else
         raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
       end
@@ -114,7 +111,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
         when 'windows'
           http_download(context, key, "#{should[:dest]}/#{name}/#{file_path}", 'windows', dp[:username], dp[:domain], dp[:password]) if download
         when 'pki'
-          http_download(context, key, "#{should[:dest]}/#{name}/#{file_path}", 'pki', pfx: dp[:pfx]) if download
+          http_download(context, key, "#{should[:dest]}/#{name}/#{file_path}", 'pki') if download
         else
           raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
         end
@@ -135,17 +132,17 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     end
   end
 
-  def recursive_download_list(uri, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil, pfx = nil)
+  def recursive_download_list(uri, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
     result = {}
-    head = make_request(uri, :head, auth_type, auth_user, auth_domain, auth_password, pfx)
+    head = make_request(uri, :head, auth_type, auth_user, auth_domain, auth_password)
     raise Puppet::ResourceError, "Failed to connect to SCCM Distribution Point! Got error #{head.code}, #{head.message}" unless head.code.to_i == 200
     if head['Content-Length'].to_i.positive? && head['Content-Type'] == 'application/octet-stream'
       result[uri] = head['Content-Length']
     elsif head['Content-Length'].to_i.zero?
-      response = make_request(uri, :get, auth_type, auth_user, auth_domain, auth_password, pfx)
+      response = make_request(uri, :get, auth_type, auth_user, auth_domain, auth_password)
       links = response.body.scan(%r{<a href="(.+?)">})
       links.each do |link|
-        lookup = recursive_download_list(link[0], auth_type, auth_user, auth_domain, auth_password, pfx)
+        lookup = recursive_download_list(link[0], auth_type, auth_user, auth_domain, auth_password)
         lookup.each do |key, value|
           result[key] = value
         end
@@ -156,15 +153,16 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
 
   # Build OpenSSL::X509::Certificate object from OpenSSL::PKCS12 object
   def build_x509_cert(pfx)
+    return unless @pfx_cert.empty?
+
     pkcs12 = OpenSSL::PKCS12.new(File.binread(pfx))
-    cert = {
+    @pfx_cert = {
       cert => OpenSSL::X509::Certificate.new(pkcs12.certificate.to_s.gsub!(%r{\n}, '\n')),
       key  => OpenSSL::PKey::RSA.new(pkcs12.key.to_s.gsub!(%r{\n}, '\n'))
     }
-    cert
   end
 
-  def make_request(endpoint, type, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil, pfx = nil)
+  def make_request(endpoint, type, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
     uri = URI.parse(endpoint)
 
     connection = Net::HTTP.new(uri.host, uri.port)
@@ -174,9 +172,8 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     end
 
     if auth_type == 'pki'
-      cert = build_x509_cert(pfx)
-      connection.cert = OpenSSL::X509::Certificate.new(cert['cert'])
-      connection.key  = OpenSSL::PKey::RSA.new(cert['key'])
+      connection.cert = @pfx_cert['cert']
+      connection.key  = @pfx_cert['key']
     end
 
     connection.read_timeout = 60
@@ -217,7 +214,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     end
   end
 
-  def http_download(context, resource, filename, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil, pfx = nil)
+  def http_download(context, resource, filename, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
     uri = URI(resource)
     context.notice("Downloading SCCM package file: #{uri}")
     http_object = Net::HTTP.new(uri.host, uri.port)
@@ -226,9 +223,8 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
       http_object.verify_mode = OpenSSL::SSL::VERIFY_NONE
     end
     if auth_type == 'pki'
-      cert = build_x509_cert(pfx)
-      http_object.cert = OpenSSL::X509::Certificate.new(cert['cert'])
-      http_object.key  = OpenSSL::PKey::RSA.new(cert['key'])
+      http_object.cert = @pfx_cert['cert']
+      http_object.key  = @pfx_cert['key']
     end
     begin
       http_object.start do |http|
