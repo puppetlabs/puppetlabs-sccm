@@ -74,7 +74,8 @@ DOC
       mandatory_for_set: false,
     },
     pfx_password: {
-      type: 'Optional[String]',
+      type: 'Optional[Variant[String,Sensitive[String]]]', # Sensitive does not currently work
+      sensitive: true,
       desc: 'Password for opening the PFX file for TLS Client Authentication. Required when auth = pki',
       mandatory_for_get: false,
       mandatory_for_set: false,
