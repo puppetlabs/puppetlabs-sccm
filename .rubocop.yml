@@ -208,6 +208,8 @@ Lint/RedundantWithObject:
   Enabled: false
 Lint/RegexpAsCondition:
   Enabled: false
+Lint/RescueException:
+  Enabled: false
 Lint/ReturnInVoidContext:
   Enabled: false
 Lint/SafeNavigationConsistency:
