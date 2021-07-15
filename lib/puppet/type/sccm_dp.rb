@@ -14,6 +14,16 @@ sccm_dp { 'sccmdp1.company.local':
   password => 's3cr3t',
   ssl      => false
 }
+sccm_dp { 'sccmdp2.company.local':
+  auth => 'none',
+  ssl  => false
+}
+sccm_dp { 'sccmdp3.company.local':
+  auth         => 'pki',
+  ssl          => true,
+  pfx          => 'C:\\Windows\\Temp\\sccm_dp_access.pfx',
+  pfx_password => 'puppetlabs'
+}
 This type provides Puppet with the necessary information about distribution points
 DOC
   features: [],
