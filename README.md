@@ -11,13 +11,13 @@
 
 ## Description
 
-This module provides Puppet types & providers to natively download packages from SCCM distribution points over HTTP. This module supports HTTP with either anonymous or Windows authentication. HTTPS with client certificates is not currently supported.
+This module provides Puppet types & providers to natively download packages from SCCM distribution points over HTTP/HTTPS. This module supports HTTP with either anonymous or Windows authentication, and HTTPS with client certificate authentication.
 
 ## Setup
 
 ### What sccm affects
 
-This module will download a package from a SCCM distribution point and store it on the local disk. Since Windows can't install software directly from a HTTP source, the files need to be downloaded locally first. This module provide a way to do that with ease.
+This module will download a package from a SCCM distribution point and store it on the local disk. Since Windows can't install software directly from a HTTP(S) source, the files need to be downloaded locally first. This module provide a way to do that with ease.
 
 ### Setup Requirements
 
@@ -63,6 +63,17 @@ sccm_package{ 'PRI00005':              # <-- PRI00005 is the SCCM package ID
   ensure => present,
   dp     => 'sccmdp2.company.local',   # <-- Must match name of sccm_dp resource
   dest   => 'C:\Windows\Temp\Pkg'      # <-- Folder in which to store packages
+}
+```
+
+Example for a Distribution Point with HTTPS access and TLS client authentication:
+
+```puppet
+sccm_dp { 'sccmdp3.company.local':                       # <-- FQDN of the SCCM distribution point
+  auth         => 'pki',                                 # <-- 'pki' for TLS client authentication
+  ssl          => true                                   # <-- Use HTTPS instead of HTTP
+  pfx          => 'C:\Windows\Temp\sccm_dp_access.pfx'   # <-- Local PFX file that contains the TLS client certificate
+  pfx_password => 'puppetlabs'                           # <-- Password to import the TLS client cert in the PFX file
 }
 ```
 
@@ -132,7 +143,10 @@ sccm::networks:
 
 sccm::distribution_points:
   sccmdp1.company.local:
-    auth: none
+    auth: pki
+    ssl: true
+    pfx: C:\Windows\Temp\sccm_dp_access.pfx
+    pfx_password: puppetlabs
   sccmdp2.company.local:
     auth: windows
     username: svcSCCM
@@ -172,11 +186,14 @@ class profile::sccm_packages(
   $dp_configs = lookup('sccm::distribution_points')
   $dp         = $networks[$facts['network']]
 
+  file { 'C:/Windows/Temp/sccm_dp_access.pfx':
+    ensure => present,
+    source => 'puppet:///modules/profile/sccm_dp_access.pfx'
+  }
+
   sccm_dp { $dp:
-    auth     => $dp_configs[$dp]['auth'],
-    username => $dp_configs[$dp]['username'],
-    domain   => $dp_configs[$dp]['domain'],
-    password => $dp_configs[$dp]['password'],
+    *       => $dp_configs[$dp],
+    require => File['C:/Windows/Temp/sccm_dp_access.pfx']
   }
 
   $pkgs = lookup('sccm::packages')
@@ -196,6 +213,8 @@ class profile::sccm_packages(
   }
 }
 ```
+
+In the above profile, we include a `file {'C:/Windows/Temp/sccm_dp_access.pfx':}` resource to place the PFX file for TLS client authentication on the local system, and make sure this happens before any distribution points are accessed.
 
 The profile above will, in the context of each node's assigned SCCM Site:
 
@@ -218,6 +237,5 @@ This will cause WinRAR and Notepad++ to get installed by downloading their respe
 
 ## Limitations
 
-* This module does not currently support passing the value to the `password` parameter of a `sccm_dp` resource as a `Sensitive` datatype. A change in the Puppet Resource API is needed to enable this scenario properly. Once the Resource API is updated, a new version of this module will be released that supports passing a Sensitive value.
-* This module currently does not provide support for SCCM Distribution Points running in HTTPS mode.
-* This module was tested against Microsoft Endpoint Configuration Manager, build 2002. 
+* This module does not currently support passing the value to the `password` or `pfx_password` parameters of a `sccm_dp` resource as a `Sensitive` datatype. A change in the Puppet Resource API is needed to enable this scenario properly. Once the Resource API is updated, a new version of this module will be released that supports passing a Sensitive value.
+* This module was tested against Microsoft Endpoint Configuration Manager, build 2002.
