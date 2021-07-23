@@ -5,6 +5,7 @@ require 'yaml'
 require 'net/http'
 require 'uri'
 require 'sccm/ruby-ntlm/ntlm/http'
+require 'sccm/iniparse/iniparse'
 
 # Implementation for the sccm_package type using the Resource API.
 class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimpleProvider
@@ -27,21 +28,23 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
       dps.each do |dp|
         next unless dp[:name] == pkg[:dp]
         pkg_proto = dp[:ssl] ? 'https' : 'http'
-        pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{pkg[:name]}"
+        pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/PkgLib/#{pkg[:name]}.INI"
+        content_id = get_content_location(pkg_uri)
+        content_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{content_id}"
         case dp[:auth]
         when 'none'
-          list_of_files = recursive_download_list(pkg_uri)
+          list_of_files = recursive_download_list(content_uri)
         when 'windows'
-          list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])
+          list_of_files = recursive_download_list(content_uri, 'windows', dp[:username], dp[:domain], dp[:password])
         when 'pki'
           build_x509_cert(dp[:pfx], dp[:pfx_password])
-          list_of_files = recursive_download_list(pkg_uri, 'pki')
+          list_of_files = recursive_download_list(content_uri, 'pki')
         else
           raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
         end
         in_sync = true
         list_of_files.each do |key, value|
-          uri_match = pkg_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
+          uri_match = content_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
           file_path = key.gsub(%r{#{uri_match}\.\d+?\/}, '')
           if File.exist?("#{pkg[:dest]}/#{pkg[:name]}/#{file_path}")
             in_sync = false unless File.size("#{pkg[:dest]}/#{pkg[:name]}/#{file_path}").to_i == value.to_i
@@ -83,20 +86,22 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     dps.each do |dp|
       next unless dp[:name] == should[:dp]
       pkg_proto = dp[:ssl] ? 'https' : 'http'
-      pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{name}"
+      pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/PkgLib/#{name}.INI"
+      content_id = get_content_location(pkg_uri)
+      content_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{content_id}"
       case dp[:auth]
       when 'none'
-        list_of_files = recursive_download_list(pkg_uri)
+        list_of_files = recursive_download_list(content_uri)
       when 'windows'
-        list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])
+        list_of_files = recursive_download_list(content_uri, 'windows', dp[:username], dp[:domain], dp[:password])
       when 'pki'
         build_x509_cert(dp[:pfx], dp[:pfx_password])
-        list_of_files = recursive_download_list(pkg_uri, 'pki')
+        list_of_files = recursive_download_list(content_uri, 'pki')
       else
         raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
       end
       list_of_files.each do |key, value|
-        uri_match = pkg_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
+        uri_match = content_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
         file_path = key.gsub(%r{#{uri_match}\.\d+?\/}, '')
         Puppet::FileSystem.dir_mkpath("#{should[:dest]}/#{name}/#{file_path}")
         download = false
@@ -129,6 +134,15 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
       Dir.delete(path)
     elsif File.exist?(path)
       File.delete(path)
+    end
+  end
+
+  def get_content_location(pkg_uri)
+    response = make_request(pkg_uri, :get, auth_type, auth_user, auth_domain, auth_password)
+    pkg_ini = response.body
+    pkg = IniParse.parse(pkg_ini)
+    pkg['Packages'].each do |line|
+      return line.key
     end
   end
 
