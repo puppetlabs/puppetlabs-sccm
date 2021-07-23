@@ -5,6 +5,7 @@ require 'yaml'
 require 'net/http'
 require 'uri'
 require 'sccm/ruby-ntlm/ntlm/http'
+require 'sccm/iniparse/iniparse'
 
 # Implementation for the sccm_package type using the Resource API.
 class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimpleProvider
@@ -27,22 +28,28 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
       dps.each do |dp|
         next unless dp[:name] == pkg[:dp]
         pkg_proto = dp[:ssl] ? 'https' : 'http'
-        pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{pkg[:name]}"
+        pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/PkgLib/#{pkg[:name]}.INI"
         case dp[:auth]
         when 'none'
-          list_of_files = recursive_download_list(pkg_uri)
+          content_id = get_content_location(pkg_uri)
+          content_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{content_id}"
+          list_of_files = recursive_download_list(content_uri)
         when 'windows'
-          list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])
+          content_id = get_content_location(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])
+          content_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{content_id}"
+          list_of_files = recursive_download_list(content_uri, 'windows', dp[:username], dp[:domain], dp[:password])
         when 'pki'
           build_x509_cert(dp[:pfx], dp[:pfx_password])
-          list_of_files = recursive_download_list(pkg_uri, 'pki')
+          content_id = get_content_location(pkg_uri, 'pki')
+          content_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{content_id}"
+          list_of_files = recursive_download_list(content_uri, 'pki')
         else
           raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
         end
         in_sync = true
         list_of_files.each do |key, value|
-          uri_match = pkg_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
-          file_path = key.gsub(%r{#{uri_match}\.\d+?\/}, '')
+          uri_match = content_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
+          file_path = key.gsub(%r{#{uri_match}\/}, '')
           if File.exist?("#{pkg[:dest]}/#{pkg[:name]}/#{file_path}")
             in_sync = false unless File.size("#{pkg[:dest]}/#{pkg[:name]}/#{file_path}").to_i == value.to_i
           else
@@ -83,21 +90,27 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     dps.each do |dp|
       next unless dp[:name] == should[:dp]
       pkg_proto = dp[:ssl] ? 'https' : 'http'
-      pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{name}"
+      pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/PkgLib/#{name}.INI"
       case dp[:auth]
       when 'none'
-        list_of_files = recursive_download_list(pkg_uri)
+        content_id = get_content_location(pkg_uri)
+        content_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{content_id}"
+        list_of_files = recursive_download_list(content_uri)
       when 'windows'
-        list_of_files = recursive_download_list(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])
+        content_id = get_content_location(pkg_uri, 'windows', dp[:username], dp[:domain], dp[:password])
+        content_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{content_id}"
+        list_of_files = recursive_download_list(content_uri, 'windows', dp[:username], dp[:domain], dp[:password])
       when 'pki'
         build_x509_cert(dp[:pfx], dp[:pfx_password])
-        list_of_files = recursive_download_list(pkg_uri, 'pki')
+        content_id = get_content_location(pkg_uri, 'pki')
+        content_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{content_id}"
+        list_of_files = recursive_download_list(content_uri, 'pki')
       else
         raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
       end
       list_of_files.each do |key, value|
-        uri_match = pkg_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
-        file_path = key.gsub(%r{#{uri_match}\.\d+?\/}, '')
+        uri_match = content_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
+        file_path = key.gsub(%r{#{uri_match}\/}, '')
         Puppet::FileSystem.dir_mkpath("#{should[:dest]}/#{name}/#{file_path}")
         download = false
         if !File.exist?("#{should[:dest]}/#{name}/#{file_path}")
@@ -132,11 +145,25 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     end
   end
 
+  def get_content_location(uri, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
+    response = make_request(uri, :get, auth_type, auth_user, auth_domain, auth_password)
+    pkg_ini = response.body
+    pkg = IniParse.parse(pkg_ini)
+    pkg['Packages'].each do |line|
+      return line.key
+    end
+  end
+
   def recursive_download_list(uri, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
     result = {}
     head = make_request(uri, :head, auth_type, auth_user, auth_domain, auth_password)
     raise Puppet::ResourceError, "Failed to connect to SCCM Distribution Point! Got error #{head.code}, #{head.message}" unless head.code.to_i == 200
     if head['Content-Length'].to_i.positive? && head['Content-Type'] == 'application/octet-stream'
+      if auth_type == 'pki'
+        uri = URI.parse(uri)
+        uri.scheme = 'https'
+        uri = uri.to_s
+      end
       result[uri] = head['Content-Length']
     elsif head['Content-Length'].to_i.zero?
       response = make_request(uri, :get, auth_type, auth_user, auth_domain, auth_password)

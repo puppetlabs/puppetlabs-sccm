@@ -33,6 +33,8 @@ To download an SCCM package with this module, we need to define two things:
 * An `sccm_dp` resource to identify an SCCM Distribution Point
 * An `sccm_package` resource to identify the package we want to download & manage
 
+If you are not using Packages in SCCM, but instead are using Applications, you can still leverage this module as SCCM creates a package under the hood for the application when you distribute the content. To retrieve the Package ID for an Application, navigate to Monitoring --> Distribution Status --> Content Status and find your Application. The Package ID will show in the `Package ID` column.
+
 Example for a SCCM Distribution Point with anonymous HTTP access:
 
 ```puppet
@@ -154,12 +156,12 @@ sccm::distribution_points:
     password: s3cr3tp@ss
 
 sccm::packages:
-  winrar:
+  powerbi:
     id: S0100006
+    name: Microsoft Power BI Desktop (May 2020) (x64)
     install:
-      file: winrar-x64-600.exe
-      args:
-        - /S
+      file: PowerBIDesktop_forReportServer_x64.msi
+      args: []
   notepad++:
     id: S0100007
     name: Notepad++ (64-bit x64)
@@ -229,11 +231,11 @@ Finally, we can specify the value for `$apps` on individual nodes, or groups of 
 `data/nodes/server1.company.com.yaml`
 ```yaml
 profile::sccm_packages::apps:
-  - winrar
+  - powerbi
   - notepad++
 ```
 
-This will cause WinRAR and Notepad++ to get installed by downloading their respective packages from SCCM, and installing the software as described in the `sccm::packages` hash for the site.
+This will cause Microsoft Power BI and Notepad++ to get installed by downloading their respective packages from SCCM, and installing the software as described in the `sccm::packages` hash for the site.
 
 ## Limitations
 
