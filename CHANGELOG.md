@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## Release 0.3.1
+
+**Features**
+* Support for downloading content for packages created by SCCM Applications (you do need to retrieve the package ID yourself first)
+* Switches to package content lookup logic to parsing the INI files in the PkgLib location
+
 ## Release 0.3.0
 
 **Features**
