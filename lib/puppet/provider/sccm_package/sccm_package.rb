@@ -29,7 +29,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
         next unless dp[:name] == pkg[:dp]
         pkg_proto = dp[:ssl] ? 'https' : 'http'
         pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/PkgLib/#{pkg[:name]}.INI"
-        content_id = get_content_location(pkg_uri)
+        content_id = get_content_location(pkg_uri, dp[:auth], dp[:username], dp[:domain], dp[:password])
         content_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{content_id}"
         case dp[:auth]
         when 'none'
@@ -87,7 +87,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
       next unless dp[:name] == should[:dp]
       pkg_proto = dp[:ssl] ? 'https' : 'http'
       pkg_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/PkgLib/#{name}.INI"
-      content_id = get_content_location(pkg_uri)
+      content_id = get_content_location(pkg_uri, dp[:auth], dp[:username], dp[:domain], dp[:password])
       content_uri = "#{pkg_proto}://#{dp[:name]}/SMS_DP_SMSPKG$/#{content_id}"
       case dp[:auth]
       when 'none'
@@ -137,8 +137,8 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     end
   end
 
-  def get_content_location(pkg_uri)
-    response = make_request(pkg_uri, :get, auth_type, auth_user, auth_domain, auth_password)
+  def get_content_location(uri, auth_type = 'none', auth_user = nil, auth_domain = nil, auth_password = nil)
+    response = make_request(uri, :get, auth_type, auth_user, auth_domain, auth_password)
     pkg_ini = response.body
     pkg = IniParse.parse(pkg_ini)
     pkg['Packages'].each do |line|
