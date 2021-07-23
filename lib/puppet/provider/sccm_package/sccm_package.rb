@@ -49,7 +49,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
         in_sync = true
         list_of_files.each do |key, value|
           uri_match = content_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
-          file_path = key.gsub(%r{#{uri_match}\.\d+?\/}, '')
+          file_path = key.gsub(%r{#{uri_match}\/}, '')
           if File.exist?("#{pkg[:dest]}/#{pkg[:name]}/#{file_path}")
             in_sync = false unless File.size("#{pkg[:dest]}/#{pkg[:name]}/#{file_path}").to_i == value.to_i
           else
@@ -110,7 +110,7 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
       end
       list_of_files.each do |key, value|
         uri_match = content_uri.gsub(%r{\.}, '\.').gsub(%r{\$}, '\$').gsub(%r{\/}, '\/')
-        file_path = key.gsub(%r{#{uri_match}\.\d+?\/}, '')
+        file_path = key.gsub(%r{#{uri_match}\/}, '')
         Puppet::FileSystem.dir_mkpath("#{should[:dest]}/#{name}/#{file_path}")
         download = false
         if !File.exist?("#{should[:dest]}/#{name}/#{file_path}")
@@ -159,6 +159,11 @@ class Puppet::Provider::SccmPackage::SccmPackage < Puppet::ResourceApi::SimplePr
     head = make_request(uri, :head, auth_type, auth_user, auth_domain, auth_password)
     raise Puppet::ResourceError, "Failed to connect to SCCM Distribution Point! Got error #{head.code}, #{head.message}" unless head.code.to_i == 200
     if head['Content-Length'].to_i.positive? && head['Content-Type'] == 'application/octet-stream'
+      if auth_type == 'pki'
+        uri = URI.parse(uri)
+        uri.scheme = 'https'
+        uri = uri.to_s
+      end
       result[uri] = head['Content-Length']
     elsif head['Content-Length'].to_i.zero?
       response = make_request(uri, :get, auth_type, auth_user, auth_domain, auth_password)
