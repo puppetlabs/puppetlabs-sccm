@@ -42,7 +42,7 @@ class Puppet::Provider::SccmDp::SccmDp < Puppet::ResourceApi::SimpleProvider
     when 'pki'
       remove_keys(new_dp, :username, :domain, :password)
     else
-      raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{new_dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."      
+      raise Puppet::ResourceError, "Unsupported authentication type for SCCM Distribution Point: '#{new_dp[:auth]}'. Valid values are 'none', 'windows' and 'pki'."
     end
     File.write("#{@confdir}/#{name}.dp.yaml", new_dp.to_yaml)
   end
@@ -55,5 +55,4 @@ class Puppet::Provider::SccmDp::SccmDp < Puppet::ResourceApi::SimpleProvider
   def remove_keys(hash, *keys)
     keys.each { |key| hash.delete(key) }
   end
-
 end
