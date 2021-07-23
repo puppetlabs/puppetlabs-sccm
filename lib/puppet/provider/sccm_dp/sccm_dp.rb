@@ -51,4 +51,9 @@ class Puppet::Provider::SccmDp::SccmDp < Puppet::ResourceApi::SimpleProvider
     context.notice("Deleting SCCM Distribution Point configuration resource '#{name}'")
     File.delete("#{@confdir}/#{name}.dp.yaml")
   end
+
+  def remove_keys(hash, *keys)
+    keys.each { |key| hash.delete(key) }
+  end
+
 end
