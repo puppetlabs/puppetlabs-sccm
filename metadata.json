@@ -4,7 +4,7 @@
   "author": "puppetlabs",
   "summary": "Download packages from SCCM distribution points",
   "license": "Apache-2.0",
-  "source": "https://forge.puppet.com/puppetlabs/sccm",
+  "source": "https://github.com/puppetlabs/puppetlabs-sccm",
   "project_page": "https://github.com/puppetlabs/puppetlabs-sccm",
   "issues_url": "https://github.com/puppetlabs/puppetlabs-sccm/issues",
   "dependencies": [
